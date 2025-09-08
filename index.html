@@ -4,106 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>스마트 가계부</title>
-    <script src="https://cdn.tailwindcss.com">
-// === Google Sheets API (Apps Script) ===
-const API_BASE = 'https://script.google.com/macros/s/AKfycbzfmO_yLaHefa11tKTyyFxAy4pDeZTDQfTvykiz0qkktj113LIXkr726BUOMaNTwi8/exec';
-const API_TOKEN = 'AKfycbzfmO_yLaHefa11tKTyyFxAy4pDeZTDQfTvykiz0qkktj113LIXkr726BUOMaNTwi8';
-
-async function apiGet(type){
-  const url = `${API_BASE}?type=${encodeURIComponent(type)}&token=${encodeURIComponent(API_TOKEN)}`;
-  const res = await fetch(url, { method: 'GET' });
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'GET failed');
-  return json.data;
-}
-
-async function apiPost(payload){
-  const res = await fetch(API_BASE, {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json' },
-    body: JSON.stringify(Object.assign({}, payload, { token: API_TOKEN }))
-  });
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'POST failed');
-  return json;
-}
-
-async function syncFromServer() {
-  try {
-    const [remoteEntries, remoteAssets] = await Promise.all([
-      apiGet('entries'),
-      apiGet('assets')
-    ]);
-    entries = remoteEntries.map(e => ({ id: Number(e.id), date:e.date, type:e.type, category:e.category, amount:Number(e.amount)||0, memo:e.memo||'', receipt: { store:e.receipt_store||'', payment:e.receipt_payment||'', items:e.receipt_items||'' } }));
-    assets = remoteAssets.map(a => ({ id: Number(a.id), type:a.type, category:a.category, name:a.name, amount:Number(a.amount)||0, memo:a.memo||'' }));
-    localStorage.setItem('entries', JSON.stringify(entries));
-    localStorage.setItem('assets', JSON.stringify(assets));
-  } catch(e) {
-    console.warn('서버 동기화 실패:', e.message);
-  }
-}
-
-async function addEntry(e) {
-  e.preventDefault();
-  const entry = {
-    id: Date.now(),
-    date: document.getElementById('entryDate').value,
-    type: document.getElementById('entryType').value,
-    category: document.getElementById('entryCategory').value,
-    amount: parseInt(document.getElementById('entryAmount').value),
-    memo: document.getElementById('entryMemo').value,
-    receipt: {
-      store: document.getElementById('receiptStore').value,
-      payment: document.getElementById('receiptPayment').value,
-      items: document.getElementById('receiptItems').value
-    }
-  };
-  await apiPost({ action:'addEntry', entry });
-  await syncFromServer();
-  document.getElementById('entryForm').reset();
-  document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
-  document.getElementById('entryCategory').innerHTML = '<option value="">유형을 먼저 선택하세요</option>';
-  updateRecentEntries();
-  alert('내역이 성공적으로 추가되었습니다! 💰');
-}
-
-async function deleteEntry(id) {
-  if (!confirm('이 내역을 삭제하시겠습니까?')) return;
-  await apiPost({ action:'deleteEntry', id });
-  await syncFromServer();
-  updateRecentEntries();
-}
-
-async function addAsset(e) {
-  e.preventDefault();
-  const asset = {
-    id: Date.now(),
-    type: document.getElementById('assetType').value,
-    category: document.getElementById('assetCategory').value,
-    name: document.getElementById('assetName').value,
-    amount: parseInt(document.getElementById('assetAmount').value),
-    memo: document.getElementById('assetMemo').value
-  };
-  await apiPost({ action:'addAsset', asset });
-  await syncFromServer();
-  hideAssetForm();
-  updateAssetsView();
-  alert('자산이 성공적으로 추가되었습니다! 💎');
-}
-
-async function init() {
-  document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
-  document.getElementById('entryForm').addEventListener('submit', addEntry);
-  document.getElementById('assetEntryForm').addEventListener('submit', addAsset);
-  await syncFromServer();
-  updateRecentEntries();
-  initMonthlyView();
-  initYearlyView();
-  updateAssetsView();
-  initSettingsView();
-}
-
-</script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Noto Sans KR', sans-serif; }
@@ -163,8 +64,14 @@ async function init() {
                     </div>
                     
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">금액 (원)</label>
-                        <input type="number" id="entryAmount" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0" required>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">금액</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="entryAmount" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0" required oninput="formatAmountInput(this)">
+                            <select id="entryCurrency" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="KRW">원 (₩)</option>
+                                <option value="USD">달러 ($)</option>
+                            </select>
+                        </div>
                     </div>
                     
                     <div class="md:col-span-2">
@@ -497,8 +404,14 @@ async function init() {
                     </div>
                     
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">금액 (원)</label>
-                        <input type="number" id="assetAmount" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0" required>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">금액</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="assetAmount" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0" required oninput="formatAmountInput(this)">
+                            <select id="assetCurrency" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="KRW">원 (₩)</option>
+                                <option value="USD">달러 ($)</option>
+                            </select>
+                        </div>
                     </div>
                     
                     <div class="md:col-span-2">
@@ -759,6 +672,25 @@ async function init() {
         let activeShares = JSON.parse(localStorage.getItem('activeShares') || '[]');
         let connectedShares = JSON.parse(localStorage.getItem('connectedShares') || '[]');
 
+        // 통화 포맷 함수
+        function formatCurrencyDisplay(amount, currency = 'KRW') {
+            const formattedAmount = amount.toLocaleString();
+            if (currency === 'USD') {
+                return `$${formattedAmount}`;
+            } else {
+                return `${formattedAmount}원`;
+            }
+        }
+
+        // 금액 입력 포맷팅 함수
+        function formatAmountInput(input) {
+            let value = input.value.replace(/[^\d]/g, '');
+            if (value) {
+                value = parseInt(value).toLocaleString();
+            }
+            input.value = value;
+        }
+
         // 자산 카테고리
         const assetCategories = {
             asset: ['현금', '예금', '적금', '주식', '부동산', '기타자산'],
@@ -849,12 +781,15 @@ async function init() {
         function addEntry(e) {
             e.preventDefault();
             
+            const amountValue = document.getElementById('entryAmount').value.replace(/,/g, '');
+            
             const entry = {
                 id: Date.now(),
                 date: document.getElementById('entryDate').value,
                 type: document.getElementById('entryType').value,
                 category: document.getElementById('entryCategory').value,
-                amount: parseInt(document.getElementById('entryAmount').value),
+                amount: parseInt(amountValue),
+                currency: document.getElementById('entryCurrency').value,
                 memo: document.getElementById('entryMemo').value,
                 receipt: {
                     store: document.getElementById('receiptStore').value,
@@ -928,7 +863,7 @@ async function init() {
                             </div>
                             <div class="text-right">
                                 <p class="font-semibold ${entry.type === 'income' ? 'text-green-600' : entry.type === 'savings' ? 'text-blue-600' : 'text-red-600'}">
-                                    ${entry.amount.toLocaleString()}원
+                                    ${formatCurrencyDisplay(entry.amount, entry.currency || 'KRW')}
                                 </p>
                                 <p class="text-xs text-gray-500">${entry.date}</p>
                             </div>
@@ -1009,11 +944,11 @@ async function init() {
             summary.net = summary.income - summary.savings - summary.expense;
             prevSummary.net = prevSummary.income - prevSummary.savings - prevSummary.expense;
             
-            // 요약 표시
-            document.getElementById('monthlyIncome').textContent = summary.income.toLocaleString() + '원';
-            document.getElementById('monthlySavings').textContent = summary.savings.toLocaleString() + '원';
-            document.getElementById('monthlyExpense').textContent = summary.expense.toLocaleString() + '원';
-            document.getElementById('monthlyNet').textContent = summary.net.toLocaleString() + '원';
+            // 요약 표시 (기본 통화로 표시)
+            document.getElementById('monthlyIncome').textContent = formatCurrencyDisplay(summary.income, settings.currency);
+            document.getElementById('monthlySavings').textContent = formatCurrencyDisplay(summary.savings, settings.currency);
+            document.getElementById('monthlyExpense').textContent = formatCurrencyDisplay(summary.expense, settings.currency);
+            document.getElementById('monthlyNet').textContent = formatCurrencyDisplay(summary.net, settings.currency);
             
             // 전월 대비 변화 표시
             updateMonthlyChanges(summary, prevSummary, prevYear, prevMonth);
@@ -1313,11 +1248,11 @@ async function init() {
             
             summary.net = summary.income - summary.savings - summary.expense;
             
-            // 요약 표시
-            document.getElementById('yearlyIncome').textContent = summary.income.toLocaleString() + '원';
-            document.getElementById('yearlySavings').textContent = summary.savings.toLocaleString() + '원';
-            document.getElementById('yearlyExpense').textContent = summary.expense.toLocaleString() + '원';
-            document.getElementById('yearlyNet').textContent = summary.net.toLocaleString() + '원';
+            // 요약 표시 (기본 통화로 표시)
+            document.getElementById('yearlyIncome').textContent = formatCurrencyDisplay(summary.income, settings.currency);
+            document.getElementById('yearlySavings').textContent = formatCurrencyDisplay(summary.savings, settings.currency);
+            document.getElementById('yearlyExpense').textContent = formatCurrencyDisplay(summary.expense, settings.currency);
+            document.getElementById('yearlyNet').textContent = formatCurrencyDisplay(summary.net, settings.currency);
             
             // 월별 차트 업데이트
             updateYearlyChart(year, yearlyEntries);
@@ -1614,12 +1549,15 @@ async function init() {
         function addAsset(e) {
             e.preventDefault();
             
+            const amountValue = document.getElementById('assetAmount').value.replace(/,/g, '');
+            
             const asset = {
                 id: Date.now(),
                 type: document.getElementById('assetType').value,
                 category: document.getElementById('assetCategory').value,
                 name: document.getElementById('assetName').value,
-                amount: parseInt(document.getElementById('assetAmount').value),
+                amount: parseInt(amountValue),
+                currency: document.getElementById('assetCurrency').value,
                 memo: document.getElementById('assetMemo').value,
                 date: new Date().toISOString().split('T')[0]
             };
@@ -1642,10 +1580,10 @@ async function init() {
             const totalLiabilities = liabilitiesList.reduce((sum, a) => sum + a.amount, 0);
             const netWorth = totalAssets - totalLiabilities;
             
-            // 요약 업데이트
-            document.getElementById('totalAssets').textContent = totalAssets.toLocaleString() + '원';
-            document.getElementById('totalLiabilities').textContent = totalLiabilities.toLocaleString() + '원';
-            document.getElementById('netWorth').textContent = netWorth.toLocaleString() + '원';
+            // 요약 업데이트 (기본 통화로 표시)
+            document.getElementById('totalAssets').textContent = formatCurrencyDisplay(totalAssets, settings.currency);
+            document.getElementById('totalLiabilities').textContent = formatCurrencyDisplay(totalLiabilities, settings.currency);
+            document.getElementById('netWorth').textContent = formatCurrencyDisplay(netWorth, settings.currency);
             
             // 자산 목록 업데이트
             updateAssetList('assetsList', assetsList, 'asset');
@@ -1674,7 +1612,7 @@ async function init() {
                     </div>
                     <div class="text-right">
                         <p class="font-semibold ${type === 'asset' ? 'text-green-600' : 'text-red-600'}">
-                            ${item.amount.toLocaleString()}원
+                            ${formatCurrencyDisplay(item.amount, item.currency || settings.currency)}
                         </p>
                         <p class="text-xs text-gray-500">${item.date}</p>
                     </div>
@@ -2236,5 +2174,5 @@ async function init() {
             checkShareCode();
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'97bdb7971065aa4a',t:'MTc1NzMyNjg2Ny4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'97be29f3e4bdaa4a',t:'MTc1NzMzMTU1MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
