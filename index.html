@@ -4,7 +4,106 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>스마트 가계부</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com">
+// === Google Sheets API (Apps Script) ===
+const API_BASE = 'https://script.google.com/macros/s/AKfycbzfmO_yLaHefa11tKTyyFxAy4pDeZTDQfTvykiz0qkktj113LIXkr726BUOMaNTwi8/exec';
+const API_TOKEN = 'AKfycbzfmO_yLaHefa11tKTyyFxAy4pDeZTDQfTvykiz0qkktj113LIXkr726BUOMaNTwi8';
+
+async function apiGet(type){
+  const url = `${API_BASE}?type=${encodeURIComponent(type)}&token=${encodeURIComponent(API_TOKEN)}`;
+  const res = await fetch(url, { method: 'GET' });
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'GET failed');
+  return json.data;
+}
+
+async function apiPost(payload){
+  const res = await fetch(API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json' },
+    body: JSON.stringify(Object.assign({}, payload, { token: API_TOKEN }))
+  });
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'POST failed');
+  return json;
+}
+
+async function syncFromServer() {
+  try {
+    const [remoteEntries, remoteAssets] = await Promise.all([
+      apiGet('entries'),
+      apiGet('assets')
+    ]);
+    entries = remoteEntries.map(e => ({ id: Number(e.id), date:e.date, type:e.type, category:e.category, amount:Number(e.amount)||0, memo:e.memo||'', receipt: { store:e.receipt_store||'', payment:e.receipt_payment||'', items:e.receipt_items||'' } }));
+    assets = remoteAssets.map(a => ({ id: Number(a.id), type:a.type, category:a.category, name:a.name, amount:Number(a.amount)||0, memo:a.memo||'' }));
+    localStorage.setItem('entries', JSON.stringify(entries));
+    localStorage.setItem('assets', JSON.stringify(assets));
+  } catch(e) {
+    console.warn('서버 동기화 실패:', e.message);
+  }
+}
+
+async function addEntry(e) {
+  e.preventDefault();
+  const entry = {
+    id: Date.now(),
+    date: document.getElementById('entryDate').value,
+    type: document.getElementById('entryType').value,
+    category: document.getElementById('entryCategory').value,
+    amount: parseInt(document.getElementById('entryAmount').value),
+    memo: document.getElementById('entryMemo').value,
+    receipt: {
+      store: document.getElementById('receiptStore').value,
+      payment: document.getElementById('receiptPayment').value,
+      items: document.getElementById('receiptItems').value
+    }
+  };
+  await apiPost({ action:'addEntry', entry });
+  await syncFromServer();
+  document.getElementById('entryForm').reset();
+  document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('entryCategory').innerHTML = '<option value="">유형을 먼저 선택하세요</option>';
+  updateRecentEntries();
+  alert('내역이 성공적으로 추가되었습니다! 💰');
+}
+
+async function deleteEntry(id) {
+  if (!confirm('이 내역을 삭제하시겠습니까?')) return;
+  await apiPost({ action:'deleteEntry', id });
+  await syncFromServer();
+  updateRecentEntries();
+}
+
+async function addAsset(e) {
+  e.preventDefault();
+  const asset = {
+    id: Date.now(),
+    type: document.getElementById('assetType').value,
+    category: document.getElementById('assetCategory').value,
+    name: document.getElementById('assetName').value,
+    amount: parseInt(document.getElementById('assetAmount').value),
+    memo: document.getElementById('assetMemo').value
+  };
+  await apiPost({ action:'addAsset', asset });
+  await syncFromServer();
+  hideAssetForm();
+  updateAssetsView();
+  alert('자산이 성공적으로 추가되었습니다! 💎');
+}
+
+async function init() {
+  document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('entryForm').addEventListener('submit', addEntry);
+  document.getElementById('assetEntryForm').addEventListener('submit', addAsset);
+  await syncFromServer();
+  updateRecentEntries();
+  initMonthlyView();
+  initYearlyView();
+  updateAssetsView();
+  initSettingsView();
+}
+
+</script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Noto Sans KR', sans-serif; }
