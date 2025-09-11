@@ -169,6 +169,13 @@
             font-size: 12px;
             color: #9ca3af;
         }
+        
+        .mood-btn.selected {
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+            color: white;
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -227,6 +234,24 @@
                                 <option value="USD">달러 ($)</option>
                             </select>
                         </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">오늘의 기분 😊</label>
+                        <div class="grid grid-cols-5 gap-2">
+                            <button type="button" class="mood-btn p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-2xl" onclick="selectMood(this, '😊')">😊</button>
+                            <button type="button" class="mood-btn p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-2xl" onclick="selectMood(this, '😢')">😢</button>
+                            <button type="button" class="mood-btn p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-2xl" onclick="selectMood(this, '😍')">😍</button>
+                            <button type="button" class="mood-btn p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-2xl" onclick="selectMood(this, '😤')">😤</button>
+                            <button type="button" class="mood-btn p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-2xl" onclick="selectMood(this, '🤔')">🤔</button>
+                            <button type="button" class="mood-btn p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-2xl" onclick="selectMood(this, '🎉')">🎉</button>
+                            <button type="button" class="mood-btn p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-2xl" onclick="selectMood(this, '😰')">😰</button>
+                            <button type="button" class="mood-btn p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-2xl" onclick="selectMood(this, '💪')">💪</button>
+                            <button type="button" class="mood-btn p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-2xl" onclick="selectMood(this, '😴')">😴</button>
+                            <button type="button" class="mood-btn p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-2xl" onclick="selectMood(this, '🤗')">🤗</button>
+                        </div>
+                        <input type="hidden" id="entryMood" value="">
+                        <p class="text-xs text-gray-500 mt-2">지출이어도 기분 좋은 소비가 있고, 수입이어도 복잡한 감정이 있을 수 있어요!</p>
                     </div>
                     
                     <div class="md:col-span-2">
@@ -1004,6 +1029,7 @@
                 amount: parseInt(amountValue),
                 currency: document.getElementById('entryCurrency').value,
                 memo: document.getElementById('entryMemo').value,
+                mood: document.getElementById('entryMood').value,
                 receipt: {
                     store: document.getElementById('receiptStore').value,
                     payment: document.getElementById('receiptPayment').value,
@@ -1018,6 +1044,8 @@
             document.getElementById('entryForm').reset();
             document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('entryCategory').innerHTML = '<option value="">유형을 먼저 선택하세요</option>';
+            document.getElementById('entryMood').value = '';
+            document.querySelectorAll('.mood-btn').forEach(btn => btn.classList.remove('selected'));
             
             updateRecentEntries();
             
@@ -1070,6 +1098,7 @@
                                         ${typeNames[entry.type]}
                                     </span>
                                     <span class="text-sm font-medium text-gray-800">${entry.category}</span>
+                                    ${entry.mood ? `<span class="text-lg">${entry.mood}</span>` : ''}
                                 </div>
                                 <p class="text-sm text-gray-600 mt-1">${entry.memo || '메모 없음'}</p>
                                 ${receiptInfo}
@@ -1442,10 +1471,9 @@
                 // 오늘 날짜 확인
                 const isToday = isCurrentMonth && today.getDate() === day;
                 
-                // 무지출 날짜 확인 (지출이 없고 수입이나 저축이 있는 날)
+                // 무지출 날짜 확인 (지출이 없는 날 - 내역이 없어도 무지출로 표시)
                 const hasExpense = dayEntries.some(entry => entry.type === 'expense');
-                const hasIncomeOrSavings = dayEntries.some(entry => entry.type === 'income' || entry.type === 'savings');
-                const isNoSpendDay = !hasExpense && hasIncomeOrSavings;
+                const isNoSpendDay = !hasExpense;
                 
                 // 클래스 설정
                 let dayClasses = 'calendar-day';
@@ -2519,7 +2547,10 @@
                     return `
                         <div class="border rounded-lg p-4 ${typeColors[entry.type]}">
                             <div class="flex items-center justify-between mb-2">
-                                <span class="font-medium">${typeNames[entry.type]}</span>
+                                <div class="flex items-center space-x-2">
+                                    <span class="font-medium">${typeNames[entry.type]}</span>
+                                    ${entry.mood ? `<span class="text-xl">${entry.mood}</span>` : ''}
+                                </div>
                                 <span class="font-bold text-lg">${formatCurrencyDisplay(entry.amount, entry.currency || 'KRW')}</span>
                             </div>
                             <div class="text-sm mb-1">
@@ -2621,11 +2652,25 @@
             }
         });
 
+        // 기분 선택 함수
+        function selectMood(button, mood) {
+            // 모든 기분 버튼에서 선택 상태 제거
+            document.querySelectorAll('.mood-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            
+            // 클릭된 버튼에 선택 상태 추가
+            button.classList.add('selected');
+            
+            // 숨겨진 입력 필드에 기분 값 저장
+            document.getElementById('entryMood').value = mood;
+        }
+
         // 페이지 로드 시 초기화
         document.addEventListener('DOMContentLoaded', function() {
             init();
             checkShareCode();
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'97c4525e5681aa4e',t:'MTc1NzM5NjEyMi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'97d801eaa2b5ea99',t:'MTc1NzYwMjU0MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
